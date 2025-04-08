@@ -29,6 +29,7 @@ class BatchAnalyze:
             return []
     
         images_layout_res = []
+        total_start_time = time.time()
         layout_start_time = time.time()
         _, fst_ocr, fst_lang = images_with_extra_info[0]
         self.model = self.model_manager.get_model(fst_ocr, self.show_log, fst_lang, self.layout_model, self.formula_enable, self.table_enable)
@@ -51,9 +52,10 @@ class BatchAnalyze:
                 layout_images, YOLO_LAYOUT_BASE_BATCH_SIZE
             )
 
-        # logger.info(
-        #     f'layout time: {round(time.time() - layout_start_time, 2)}, image num: {len(images)}'
-        # )
+        layout_time = round(time.time() - layout_start_time, 2)
+        logger.info(
+            f'layout detection time: {layout_time}, image num: {len(images)}'
+        )
 
         if self.model.apply_formula:
             # 公式检测
@@ -62,9 +64,10 @@ class BatchAnalyze:
                 # images, self.batch_ratio * MFD_BASE_BATCH_SIZE
                 images, MFD_BASE_BATCH_SIZE
             )
-            # logger.info(
-            #     f'mfd time: {round(time.time() - mfd_start_time, 2)}, image num: {len(images)}'
-            # )
+            mfd_time = round(time.time() - mfd_start_time, 2)
+            logger.info(
+                f'mfd time: {mfd_time}, image num: {len(images)}'
+            )
 
             # 公式识别
             mfr_start_time = time.time()
@@ -77,15 +80,18 @@ class BatchAnalyze:
             for image_index in range(len(images)):
                 images_layout_res[image_index] += images_formula_list[image_index]
                 mfr_count += len(images_formula_list[image_index])
-            # logger.info(
-            #     f'mfr time: {round(time.time() - mfr_start_time, 2)}, image num: {mfr_count}'
-            # )
+            mfr_time = round(time.time() - mfr_start_time, 2)
+            logger.info(
+                f'mfr time: {mfr_time}, formula num: {mfr_count}'
+            )
 
         # 清理显存
         # clean_vram(self.model.device, vram_threshold=8)
 
         ocr_res_list_all_page = []
         table_res_list_all_page = []
+        # preprocessing_start_time = time.time()
+        
         for index in range(len(images)):
             _, ocr_enable, _lang = images_with_extra_info[index]
             layout_res = images_layout_res[index]
@@ -109,6 +115,9 @@ class BatchAnalyze:
                                                 'lang':_lang,
                                                 'table_img':table_img,
                                               })
+        
+        # preprocessing_time = round(time.time() - preprocessing_start_time, 2)
+        # logger.info(f'Result preprocessing time: {preprocessing_time}')
 
         # 文本框检测
         det_start = time.time()
@@ -144,13 +153,14 @@ class BatchAnalyze:
                     ocr_result_list = get_ocr_result_list(ocr_res, useful_list, ocr_res_list_dict['ocr_enable'], new_image, _lang)
                     ocr_res_list_dict['layout_res'].extend(ocr_result_list)
             det_count += len(ocr_res_list_dict['ocr_res_list'])
-        # logger.info(f'ocr-det time: {round(time.time()-det_start, 2)}, image num: {det_count}')
+        det_time = round(time.time()-det_start, 2)
+        logger.info(f'ocr time: {det_time}, text block num: {det_count}')
 
 
         # 表格识别 table recognition
         if self.model.apply_table:
             table_start = time.time()
-            table_count = 0
+            table_count = len(table_res_list_all_page)
             # for table_res_list_dict in table_res_list_all_page:
             for table_res_dict in tqdm(table_res_list_all_page, desc="Table Predict"):
                 _lang = table_res_dict['lang']
@@ -171,7 +181,9 @@ class BatchAnalyze:
                     ocr_engine=ocr_engine,
                     table_sub_model_name='slanet_plus'
                 )
+                single_table_start = time.time()
                 html_code, table_cell_bboxes, logic_points, elapse = table_model.predict(table_res_dict['table_img'])
+                single_table_time = round(time.time() - single_table_start, 2)
                 # 判断是否返回正常
                 if html_code:
                     expected_ending = html_code.strip().endswith(
@@ -181,18 +193,20 @@ class BatchAnalyze:
                         table_res_dict['table_res']['html'] = html_code
                     else:
                         logger.warning(
-                            'table recognition processing fails, not found expected HTML table end'
+                            f'Table recognition processing fails, not found expected HTML table end, time: {single_table_time}s'
                         )
                 else:
                     logger.warning(
-                        'table recognition processing fails, not get html return'
+                        f'Table recognition processing fails, not get html return, time: {single_table_time}s'
                     )
-            # logger.info(f'table time: {round(time.time() - table_start, 2)}, image num: {len(table_res_list_all_page)}')
+            table_time = round(time.time() - table_start, 2)
+            logger.info(f'Table recognition total time: {table_time}, table num: {table_count}')
 
         # Create dictionaries to store items by language
         need_ocr_lists_by_lang = {}  # Dict of lists for each language
         img_crop_lists_by_lang = {}  # Dict of lists for each language
 
+        # ocr_prep_start_time = time.time()
         for layout_res in images_layout_res:
             for layout_res_item in layout_res:
                 if layout_res_item['category_id'] in [15]:
@@ -211,18 +225,19 @@ class BatchAnalyze:
                         # Remove the fields after adding to lists
                         layout_res_item.pop('np_img')
                         layout_res_item.pop('lang')
-
+        
+        # ocr_prep_time = round(time.time() - ocr_prep_start_time, 2)
+        # logger.info(f'OCR prep time: {ocr_prep_time}')
 
         if len(img_crop_lists_by_lang) > 0:
-
             # Process OCR by language
-            rec_time = 0
             rec_start = time.time()
             total_processed = 0
 
             # Process each language separately
             for lang, img_crop_list in img_crop_lists_by_lang.items():
                 if len(img_crop_list) > 0:
+                    lang_start_time = time.time()
                     # Get OCR results for this language's images
                     atom_model_manager = AtomModelSingleton()
                     ocr_model = atom_model_manager.get_atom_model(
@@ -244,10 +259,58 @@ class BatchAnalyze:
                         layout_res_item['score'] = float(round(ocr_score, 2))
 
                     total_processed += len(img_crop_list)
+                    lang_time = round(time.time() - lang_start_time, 2)
+                    logger.info(f'OCR recognition for language {lang} time: {lang_time}, items: {len(img_crop_list)}')
 
-            rec_time += time.time() - rec_start
-            # logger.info(f'ocr-rec time: {round(rec_time, 2)}, total images processed: {total_processed}')
+            rec_time = round(time.time() - rec_start, 2)
+            logger.info(f'OCR recognition total time: {rec_time}, total images processed: {total_processed}')
 
-
+        total_time = round(time.time() - total_start_time, 2)
+        
+        # 收集所有处理阶段的时间数据
+        time_data = {
+            "Layout": layout_time,
+            "MFD": 0,
+            "MFR": 0,
+            "det": det_time,
+            "rec": 0 if 'rec_time' not in locals() else rec_time,
+            "Table": 0 if not self.model.apply_table or 'table_time' not in locals() else table_time,
+        }
+        
+        if self.model.apply_formula:
+            time_data["MFD"] = mfd_time
+            time_data["MFR"] = mfr_time
+        
+        # 计算总时间
+        time_data["Total"] = total_time
+        
+        # 计算每页平均时间
+        page_count = len(images)
+        time_data_per_page = {k: round(v / page_count, 2) for k, v in time_data.items()}
+        
+        # 输出表格标题
+        headers = ["Layout", "MFD", "MFR", "OCR det", "OCR rec", "Table", "Total"]
+        header_str = "\t".join(headers)
+        
+        # 输出总耗时
+        total_values = [str(round(time_data.get(h, 0), 2)) for h in headers]
+        total_str = "\t".join(total_values)
+        
+        # 输出单页平均耗时
+        per_page_values = [str(round(time_data_per_page.get(h, 0), 2)) for h in headers]
+        per_page_str = "\t".join(per_page_values)
+        
+        # 打印时间统计表格
+        logger.info("=" * 80)
+        logger.info("PDF处理时间统计 (单位: 秒)")
+        logger.info("=" * 80)
+        logger.info(header_str)
+        logger.info("-" * 80)
+        logger.info(f"总耗时:\t{total_str}")
+        logger.info(f"平均每页:\t{per_page_str}")
+        logger.info("=" * 80)
+        
+        # 简化的性能统计
+        logger.info(f"总处理时间: {total_time}秒, 共处理{page_count}页, 平均每页: {round(total_time/page_count, 2)}秒")
 
         return images_layout_res

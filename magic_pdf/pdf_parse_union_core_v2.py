@@ -689,6 +689,8 @@ def parse_page_core(
     drop_reason = []
 
     """从magic_model对象中获取后面会用到的区块信息"""
+    # todo zcw 每次输出
+    # print("=================3")
     img_groups = magic_model.get_imgs_v2(page_id)
     table_groups = magic_model.get_tables_v2(page_id)
 

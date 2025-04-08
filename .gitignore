@@ -5,6 +5,9 @@ venv*/
 envs/
 slurm_logs/
 
+*/output/*
+*/output1/*
+
 sync1.sh
 data_preprocess_pj1
 data-preparation1
