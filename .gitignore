@@ -8,6 +8,11 @@ slurm_logs/
 */output/*
 */output1/*
 
+*.egg-info
+
+fusion_result.json
+entrypoint.sh
+
 sync1.sh
 data_preprocess_pj1
 data-preparation1

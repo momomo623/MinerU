@@ -289,7 +289,7 @@ class BatchAnalyze:
         time_data_per_page = {k: round(v / page_count, 2) for k, v in time_data.items()}
         
         # 输出表格标题
-        headers = ["Layout", "MFD", "MFR", "OCR det", "OCR rec", "Table", "Total"]
+        headers = ["Layout", "MFD", "MFR", "det", "rec", "Table", "Total"]
         header_str = "\t".join(headers)
         
         # 输出总耗时
@@ -309,7 +309,7 @@ class BatchAnalyze:
         logger.info(f"总耗时:\t{total_str}")
         logger.info(f"平均每页:\t{per_page_str}")
         logger.info("=" * 80)
-        
+
         # 简化的性能统计
         logger.info(f"总处理时间: {total_time}秒, 共处理{page_count}页, 平均每页: {round(total_time/page_count, 2)}秒")
 
