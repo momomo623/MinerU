@@ -14,6 +14,10 @@ from .ocr_utils import check_img, preprocess_image, sorted_boxes, merge_det_boxe
 from .tools.infer.predict_system import TextSystem
 from .tools.infer import pytorchocr_utility as utility
 import argparse
+import time  # 添加导入时间模块
+
+import torch
+import torch_npu
 
 
 latin_lang = [
@@ -74,7 +78,9 @@ class PytorchPaddleOCR(TextSystem):
         kwargs['rec_char_dict_path'] = os.path.join(root_dir, 'pytorchocr', 'utils', 'resources', 'dict', dict_file)
         # kwargs['rec_batch_num'] = 8
 
-        kwargs['device'] = get_device()
+        # kwargs['device'] = "npu:1"
+        # kwargs['device'] = get_device()
+        kwargs['device'] = 'cpu'
 
         default_args = vars(args)
         default_args.update(kwargs)
@@ -131,6 +137,7 @@ class PytorchPaddleOCR(TextSystem):
                     if not isinstance(img, list):
                         img = preprocess_image(img)
                         img = [img]
+                        # todo1
                     rec_res, elapse = self.text_recognizer(img, tqdm_enable=tqdm_enable)
                     # logger.debug("rec_res num  : {}, elapsed : {}".format(len(rec_res), elapse))
                     ocr_res.append(rec_res)
@@ -179,8 +186,9 @@ class PytorchPaddleOCR(TextSystem):
         return filter_boxes, filter_rec_res
 
 if __name__ == '__main__':
+    start_time = time.time()  # 记录开始时间
     pytorch_paddle_ocr = PytorchPaddleOCR()
-    img = cv2.imread("/Users/myhloli/Downloads/screenshot-20250326-194348.png")
+    img = cv2.imread("/home/aicc/mineru/MinerU_1.3.0/projects/web_api/output/成人肥胖食养指南（2024 年版）/images/0a7ce4042ca2bdcaf17b183331fc0595c4491b17f13e285f092f3f189659085e.jpg")
     dt_boxes, rec_res = pytorch_paddle_ocr(img)
     ocr_res = []
     if not dt_boxes and not rec_res:
@@ -189,5 +197,7 @@ if __name__ == '__main__':
         tmp_res = [[box.tolist(), res] for box, res in zip(dt_boxes, rec_res)]
         ocr_res.append(tmp_res)
     print(ocr_res)
+    end_time = time.time()  # 记录结束时间
+    print(f"运行时间: {end_time - start_time:.2f} 秒")  # 打印运行时间
 
 

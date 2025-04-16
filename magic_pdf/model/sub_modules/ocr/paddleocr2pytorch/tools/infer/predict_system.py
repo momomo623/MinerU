@@ -70,6 +70,7 @@ class TextSystem(object):
             print("cls num  : {}, elapse : {}".format(
                 len(img_crop_list), elapse))
 
+# todo1
         rec_res, elapse = self.text_recognizer(img_crop_list)
         print("rec_res num  : {}, elapse : {}".format(
             len(rec_res), elapse))

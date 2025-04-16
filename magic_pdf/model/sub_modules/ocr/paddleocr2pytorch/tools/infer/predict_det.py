@@ -1,5 +1,5 @@
 import sys
-
+import os
 import numpy as np
 import time
 import torch
@@ -180,8 +180,29 @@ class TextDetector(BaseOCRV20):
         img = np.expand_dims(img, axis=0)
         shape_list = np.expand_dims(shape_list, axis=0)
         img = img.copy()
+        
+        # 保存预处理后的tensor为bin文件
+        try:
+            save_dir = os.path.join(os.getcwd(), "preprocessed_data", "det")
+            os.makedirs(save_dir, exist_ok=True)
+            
+            # 生成唯一文件名
+            filename = os.path.join(save_dir, f"det_input_{time.strftime('%Y%m%d_%H%M%S')}_{np.random.randint(1000)}.bin")
+            # 保存为二进制文件
+            img.tofile(filename)
+            
+            # 保存形状信息以便后续加载
+            shape_filename = filename + ".shape.txt"
+            with open(shape_filename, 'w') as f:
+                f.write(','.join([str(s) for s in img.shape]))
+            
+            print(f"Detection preprocessed tensor saved to {filename}")
+        except Exception as e:
+            print(f"Failed to save preprocessed tensor: {e}")
+        
         starttime = time.time()
 
+# todo2
         with torch.no_grad():
             inp = torch.from_numpy(img)
             inp = inp.to(self.device)

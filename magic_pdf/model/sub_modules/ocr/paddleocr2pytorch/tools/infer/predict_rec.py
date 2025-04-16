@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import math
 import time
+import os
 import torch
 from tqdm import tqdm
 
@@ -301,7 +302,11 @@ class TextRecognizer(BaseOCRV20):
         rec_res = [['', 0.0]] * img_num
         batch_num = self.rec_batch_num
         elapse = 0
-        # for beg_img_no in range(0, img_num, batch_num):
+        
+        # 创建保存目录
+        save_dir = os.path.join(os.getcwd(), "preprocessed_data", "rec")
+        os.makedirs(save_dir, exist_ok=True)
+
         with tqdm(total=img_num, desc='OCR-rec Predict', disable=not tqdm_enable) as pbar:
             index = 0
             for beg_img_no in range(0, img_num, batch_num):
@@ -359,7 +364,30 @@ class TextRecognizer(BaseOCRV20):
                         norm_img_batch.append(norm_img)
                 norm_img_batch = np.concatenate(norm_img_batch)
                 norm_img_batch = norm_img_batch.copy()
-
+                
+                # 保存整批图像的预处理tensor
+                try:
+                    # 生成唯一文件名
+                    timestamp = time.strftime('%Y%m%d_%H%M%S')
+                    rand_num = np.random.randint(1000)
+                    filename = os.path.join(save_dir, f"rec_input_batch_{beg_img_no}_{timestamp}_{rand_num}.bin")
+                    
+                    # 保存为二进制文件
+                    norm_img_batch.tofile(filename)
+                    
+                    # 保存形状信息
+                    shape_filename = filename + ".shape.txt"
+                    with open(shape_filename, 'w') as f:
+                        f.write(','.join([str(s) for s in norm_img_batch.shape]))
+                    
+                    if tqdm_enable:
+                        tqdm.write(f"Recognition batch preprocessed tensor saved to {filename}")
+                except Exception as e:
+                    if tqdm_enable:
+                        tqdm.write(f"Failed to save preprocessed tensor: {e}")
+                
+                starttime = time.time()
+                
                 if self.rec_algorithm == "SRN":
                     starttime = time.time()
                     encoder_word_pos_list = np.concatenate(encoder_word_pos_list)

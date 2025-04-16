@@ -12,6 +12,7 @@ slurm_logs/
 
 fusion_result.json
 entrypoint.sh
+core.*
 
 sync1.sh
 data_preprocess_pj1
