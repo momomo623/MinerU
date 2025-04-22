@@ -11,9 +11,14 @@ from ...pytorchocr.base_ocr_v20 import BaseOCRV20
 from . import pytorchocr_utility as utility
 from ...pytorchocr.postprocess import build_post_process
 
+from .ais_bench_infer import AisBenchInfer
+
 
 class TextRecognizer(BaseOCRV20):
     def __init__(self, args, **kwargs):
+        
+        self.ais_bench_infer = AisBenchInfer(device_id=0)
+        
         self.device = args.device
         self.rec_image_shape = [int(v) for v in args.rec_image_shape.split(",")]
         self.character_type = args.rec_char_type
@@ -366,25 +371,25 @@ class TextRecognizer(BaseOCRV20):
                 norm_img_batch = norm_img_batch.copy()
                 
                 # 保存整批图像的预处理tensor
-                try:
-                    # 生成唯一文件名
-                    timestamp = time.strftime('%Y%m%d_%H%M%S')
-                    rand_num = np.random.randint(1000)
-                    filename = os.path.join(save_dir, f"rec_input_batch_{beg_img_no}_{timestamp}_{rand_num}.bin")
+                # try:
+                #     # 生成唯一文件名
+                #     timestamp = time.strftime('%Y%m%d_%H%M%S')
+                #     rand_num = np.random.randint(1000)
+                #     filename = os.path.join(save_dir, f"rec_input_batch_{beg_img_no}_{timestamp}_{rand_num}.bin")
                     
-                    # 保存为二进制文件
-                    norm_img_batch.tofile(filename)
+                #     # 保存为二进制文件
+                #     norm_img_batch.tofile(filename)
                     
-                    # 保存形状信息
-                    shape_filename = filename + ".shape.txt"
-                    with open(shape_filename, 'w') as f:
-                        f.write(','.join([str(s) for s in norm_img_batch.shape]))
+                #     # 保存形状信息
+                #     shape_filename = filename + ".shape.txt"
+                #     with open(shape_filename, 'w') as f:
+                #         f.write(','.join([str(s) for s in norm_img_batch.shape]))
                     
-                    if tqdm_enable:
-                        tqdm.write(f"Recognition batch preprocessed tensor saved to {filename}")
-                except Exception as e:
-                    if tqdm_enable:
-                        tqdm.write(f"Failed to save preprocessed tensor: {e}")
+                #     if tqdm_enable:
+                #         tqdm.write(f"Recognition batch preprocessed tensor saved to {filename}")
+                # except Exception as e:
+                #     if tqdm_enable:
+                #         tqdm.write(f"Failed to save preprocessed tensor: {e}")
                 
                 starttime = time.time()
                 
@@ -444,16 +449,36 @@ class TextRecognizer(BaseOCRV20):
 
                 else:
                     starttime = time.time()
-
-                    with torch.no_grad():
-                        inp = torch.from_numpy(norm_img_batch)
-                        inp = inp.to(self.device)
-                        prob_out = self.net(inp)
-
-                    if isinstance(prob_out, list):
-                        preds = [v.cpu().numpy() for v in prob_out]
+                    
+                    shape_str = norm_img_batch.shape
+                    # print(f"Shape of norm_img_batch: {shape_str}")
+                    
+                    # 根据宽度判断使用哪种推理代码
+                    if len(shape_str) == 4 and shape_str[3] == 320:
+                        # print("使用新的推理代码（AIS Bench）")
+                        # 新的推理代码
+                        prob_out = self.ais_bench_infer.infer_rec(norm_img_batch)
+                        # 确保 preds 是 NumPy 数组
+                        if isinstance(prob_out, list) and len(prob_out) == 1:
+                            preds = prob_out[0]  # 提取列表中的第一个 NumPy 数组
+                        elif isinstance(prob_out, np.ndarray):
+                            preds = prob_out
+                        else:
+                            raise ValueError(f"Unexpected prob_out type: {type(prob_out)}")
                     else:
-                        preds = prob_out.cpu().numpy()
+                        print("使用原始推理代码")
+                        # 原来的推理代码
+                        with torch.no_grad():
+                            inp = torch.from_numpy(norm_img_batch)
+                            inp = inp.to(self.device)
+                            prob_out = self.net(inp)
+                        # print(prob_out)
+                  
+                        # 对接后处理
+                        if isinstance(prob_out, list):
+                            preds = [v.cpu().numpy() for v in prob_out]
+                        else:
+                            preds = prob_out.cpu().numpy()
 
                 rec_result = self.postprocess_op(preds)
                 for rno in range(len(rec_result)):
@@ -464,5 +489,5 @@ class TextRecognizer(BaseOCRV20):
                 current_batch_size = min(batch_num, img_num - index * batch_num)
                 index += 1
                 pbar.update(current_batch_size)
-
+        # ais_bench_infer.free_resource()
         return rec_res, elapse

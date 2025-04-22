@@ -7,6 +7,7 @@ from ...pytorchocr.base_ocr_v20 import BaseOCRV20
 from . import pytorchocr_utility as utility
 from ...pytorchocr.data import create_operators, transform
 from ...pytorchocr.postprocess import build_post_process
+from .ais_bench_infer import AisBenchInfer
 
 
 class TextDetector(BaseOCRV20):
@@ -182,27 +183,64 @@ class TextDetector(BaseOCRV20):
         img = img.copy()
         
         # 保存预处理后的tensor为bin文件
-        try:
-            save_dir = os.path.join(os.getcwd(), "preprocessed_data", "det")
-            os.makedirs(save_dir, exist_ok=True)
+        # try:
+        #     save_dir = os.path.join(os.getcwd(), "preprocessed_data", "det")
+        #     os.makedirs(save_dir, exist_ok=True)
             
-            # 生成唯一文件名
-            filename = os.path.join(save_dir, f"det_input_{time.strftime('%Y%m%d_%H%M%S')}_{np.random.randint(1000)}.bin")
-            # 保存为二进制文件
-            img.tofile(filename)
+        #     # 生成唯一文件名
+        #     filename = os.path.join(save_dir, f"det_input_{time.strftime('%Y%m%d_%H%M%S')}_{np.random.randint(1000)}.bin")
+        #     # 保存为二进制文件
+        #     img.tofile(filename)
             
-            # 保存形状信息以便后续加载
-            shape_filename = filename + ".shape.txt"
-            with open(shape_filename, 'w') as f:
-                f.write(','.join([str(s) for s in img.shape]))
+        #     # 保存形状信息以便后续加载
+        #     shape_filename = filename + ".shape.txt"
+        #     with open(shape_filename, 'w') as f:
+        #         f.write(','.join([str(s) for s in img.shape]))
             
-            print(f"Detection preprocessed tensor saved to {filename}")
-        except Exception as e:
-            print(f"Failed to save preprocessed tensor: {e}")
+        #     print(f"Detection preprocessed tensor saved to {filename}")
+        # except Exception as e:
+        #     print(f"Failed to save preprocessed tensor: {e}")
         
         starttime = time.time()
 
 # todo2
+        # 新代码:
+        # 执行华为昇腾推理
+        # ais_bench_infer = AisBenchInfer(device_id=0)
+        # outputs = ais_bench_infer.infer_det(img)  # outputs 类型为 List[numpy.ndarray]
+        
+        # print("***********11111111111***************************")
+        # print(outputs)
+        # print("**********22222222222****************************")
+        # print(outputs[0])
+        # print(outputs[0].shape)
+
+        # 提取第一个输出数组（假设检测模型只有一个输出节点）
+
+        # 根据检测算法构建 preds 字典
+        # preds = {}
+        # if self.det_algorithm == "EAST":
+        #     # 假设华为模型输出顺序为 [f_geo, f_score]
+        #     preds['f_geo'] = output_np[0]    # 根据实际输出索引调整
+        #     preds['f_score'] = output_np[1]   # 例如 output_np[0] 对应 f_geo
+        # elif self.det_algorithm == 'SAST':
+        #     # 假设输出顺序为 [f_border, f_score, f_tco, f_tvo]
+        #     preds['f_border'] = output_np[0]
+        #     preds['f_score'] = output_np[1]
+        #     preds['f_tco'] = output_np[2]
+        #     preds['f_tvo'] = output_np[3]
+        # elif self.det_algorithm in ['DB', 'PSE', 'DB++']:
+        #     # 假设输出直接对应 maps
+        #     preds['maps'] = output_np        # 例如 output_np.shape = (1, 3, H, W)
+        # elif self.det_algorithm == 'FCE':
+        #     # 假设多层级输出
+        #     for i in range(len(output_np)):
+        #         preds['level_{}'.format(i)] = output_np[i]
+        # else:
+        #     raise NotImplementedError
+        
+        # print("**********33333333333****    " + self.det_algorithm)
+
         with torch.no_grad():
             inp = torch.from_numpy(img)
             inp = inp.to(self.device)
@@ -210,6 +248,7 @@ class TextDetector(BaseOCRV20):
 
         preds = {}
         if self.det_algorithm == "EAST":
+           
             preds['f_geo'] = outputs['f_geo'].cpu().numpy()
             preds['f_score'] = outputs['f_score'].cpu().numpy()
         elif self.det_algorithm == 'SAST':

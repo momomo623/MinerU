@@ -79,8 +79,11 @@ class PytorchPaddleOCR(TextSystem):
         # kwargs['rec_batch_num'] = 8
 
         # kwargs['device'] = "npu:1"
-        # kwargs['device'] = get_device()
-        kwargs['device'] = 'cpu'
+        kwargs['device'] = get_device()
+        # kwargs['device'] = 'cpu'
+        # print("--------===============")
+        # print(get_device())
+        # kwargs['device'] = 'cpu'
 
         default_args = vars(args)
         default_args.update(kwargs)
