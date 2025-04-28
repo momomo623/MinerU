@@ -17,7 +17,7 @@ from .ais_bench_infer import AisBenchInfer
 class TextRecognizer(BaseOCRV20):
     def __init__(self, args, **kwargs):
         
-        self.ais_bench_infer = AisBenchInfer(device_id=0)
+        # self.ais_bench_infer = AisBenchInfer(device_id=0)
         
         self.device = args.device
         self.rec_image_shape = [int(v) for v in args.rec_image_shape.split(",")]
@@ -454,17 +454,18 @@ class TextRecognizer(BaseOCRV20):
                     # print(f"Shape of norm_img_batch: {shape_str}")
                     
                     # 根据宽度判断使用哪种推理代码
-                    if len(shape_str) == 4 and shape_str[3] == 320:
+                    if False and len(shape_str) == 4 and shape_str[3] == 320:
+                        pass
                         # print("使用新的推理代码（AIS Bench）")
                         # 新的推理代码
-                        prob_out = self.ais_bench_infer.infer_rec(norm_img_batch)
+                        # prob_out = self.ais_bench_infer.infer_rec(norm_img_batch)
                         # 确保 preds 是 NumPy 数组
-                        if isinstance(prob_out, list) and len(prob_out) == 1:
-                            preds = prob_out[0]  # 提取列表中的第一个 NumPy 数组
-                        elif isinstance(prob_out, np.ndarray):
-                            preds = prob_out
-                        else:
-                            raise ValueError(f"Unexpected prob_out type: {type(prob_out)}")
+                        # if isinstance(prob_out, list) and len(prob_out) == 1:
+                        #     preds = prob_out[0]  # 提取列表中的第一个 NumPy 数组
+                        # elif isinstance(prob_out, np.ndarray):
+                        #     preds = prob_out
+                        # else:
+                        #     raise ValueError(f"Unexpected prob_out type: {type(prob_out)}")
                     else:
                         print("使用原始推理代码")
                         # 原来的推理代码

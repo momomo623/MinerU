@@ -2,10 +2,24 @@ import os
 import time
 import numpy as np
 
-from ais_bench.infer.interface import InferSession
+from ais_bench.infer.interface import InferSession,MultiDeviceSession
 from ais_bench.infer.common.utils import logger_print
 
+model_path_rec = "/home/aicc/mineru/model/d_n_recfix.om"
+model_path_det = "/home/aicc/mineru/model/d_n_decfix_linux_aarch64.om"
+
+
+
 class AisBenchInfer:
+    _instance = None  # 单例模式的类变量
+
+    def __new__(cls, device_id=1):
+        # 单例模式实现：如果实例不存在则创建，否则返回已有实例
+        if cls._instance is None:
+            cls._instance = super(AisBenchInfer, cls).__new__(cls)
+            cls._instance._initialized = False  # 标记是否已经初始化
+        return cls._instance
+
     def __init__(self, device_id=1):
         """
         初始化推理模型
@@ -14,12 +28,36 @@ class AisBenchInfer:
             device_id: 设备ID
             model_path: 模型路径
         """
-        self.device_id = device_id
-        self.model_path_rec = "/home/aicc/mineru/model/d_n_recfix.om"
-        self.model_path_det = "/home/aicc/mineru/model/d_n_decfix_linux_aarch64.om"
-        self.session_rec = InferSession(device_id, self.model_path_rec)
-        self.session_det = InferSession(device_id, self.model_path_det)
-        print("初始化完成:")
+        # 只在第一次初始化时执行
+        if not self._initialized:
+            self.device_id = device_id
+            self.model_path_rec = model_path_rec
+            self.session_rec = InferSession(device_id, self.model_path_rec)
+            self.model_path_det = model_path_det
+            # self.session_det = InferSession(device_id, self.model_path_det)
+            
+            self.multi_session_det = MultiDeviceSession(self.model_path_det)
+            
+            # self.session_det.set_staticbatch()
+            print("初始化完成:")
+            self._initialized = True  # 标记为已初始化
+    
+    def muti_infer_det(self, norm_img_batch: np.ndarray):
+        """
+        执行推理
+        
+        Args:
+            norm_img_batch: 输入的图像批次数据
+            
+        Returns:
+            推理输出结果
+        """
+        
+        
+        outputs = self.multi_session_det.infer({self.device_id: [[norm_img_batch]]}, mode='dymshape', custom_sizes=1000000)
+        print("推理成功")
+        # print(outputs)
+        return outputs
     
     def infer_rec(self, norm_img_batch: np.ndarray):
         """
@@ -44,8 +82,20 @@ class AisBenchInfer:
         Returns:
             推理输出结果
         """
+        # model_path_det = "/home/aicc/mineru/model/d_n_decfix_linux_aarch64.om"
+        # session_det = InferSession(self.device_id, model_path_det)
         outputs = self.session_det.infer([norm_img_batch], mode='dymshape')
+        print("type(outputs):", type(outputs))          # 应输出 <class 'list'>
+        print("type(outputs[0]):", type(outputs[0]))       # 应输出 <class 'numpy.ndarray'>
+        print("outputs[0].dtype:", outputs[0].dtype)       # 应输出 float32
+        print("outputs[0].shape:", outputs[0].shape)       # 例如 (6, 25, 6625)
+        print("outputs:", outputs)       # 例如 (6, 25, 6625)
+        print(len(outputs))       # 例如 (6, 25, 6625)
+        
         print("推理成功")
+        # outputs = self.session_det.infer([norm_img_batch], mode='dymshape')
+        # print("推理成功")
+        # session_det.free_resource()
         return outputs
     
     def free_resource(self):
@@ -113,7 +163,7 @@ class AisBenchInfer:
         print("ndata数据类型:", ndata.dtype)
         
         # 重塑数据
-        ndata = ndata.reshape(1, 3, 608, 704)
+        ndata = ndata.reshape(1, 3, 800, 704)
         print("重塑后的ndata shape:", ndata.shape)
         
         # 执行推理
@@ -143,7 +193,7 @@ class AisBenchInfer:
         Returns:
             所有bin文件的推理结果字典，键为bin文件名，值为推理输出
         """
-        session = InferSession(device_id, model_path)
+        session = MultiDeviceSession( model_path)
         # session.set_staticbatch()
         results = {}
         
@@ -179,7 +229,7 @@ class AisBenchInfer:
                 print(f"重塑后的数据shape: {ndata.shape}")
                 
                 # 执行推理
-                outputs = session.infer([ndata], mode='dymshape')
+                outputs = session.infer({device_id: [[ndata]]}, mode='dymshape', custom_sizes=10000000)
                 print(f"{bin_file} 推理成功")
                 
                 # 记录结果
@@ -189,7 +239,7 @@ class AisBenchInfer:
                 print(f"处理 {bin_file} 时出错: {e}")
         
         # 释放资源
-        session.free_resource()
+        # session.free_resource()
         
         return results
     
@@ -256,13 +306,23 @@ class AisBenchInfer:
         return results
 
 # 使用示例:
+
+# import acl
+
 # infer_model = AisBenchInfer()
-# result = infer_model.infer(norm_img_batch)
+# result = infer_model.infer_det(np.zeros((1, 3, 608, 704), dtype=np.float32))
+# result = infer_model.infer_det(np.zeros((1, 3, 608, 704), dtype=np.float32))
+
+# 使用 muti 推理多个 ，muti每次都会创建InferSession。    使用推理接口时才会在指定的几个devices的每个进程中新建一个InferSession。
+# result = infer_model.muti_infer_det(np.zeros((1, 3, 800, 704), dtype=np.float32))
+# result = infer_model.muti_infer_det(np.zeros((1, 3, 608, 704), dtype=np.float32))
+
+
 # infer_model.free_resource()
 
 # 或者直接使用静态方法:
 # result = AisBenchInfer.infer_with_file('/home/aicc/mineru/MinerU_1.3.0/demo/preprocessed_data/rec/rec_input_batch_0_20250421_091529_142.bin')
-# result = AisBenchInfer.infer_with_file_det('/home/aicc/mineru/MinerU_1.3.0/demo/preprocessed_data/det/det_input_20250421_034745_894.bin')
+# result = AisBenchInfer.infer_with_file_det('/home/aicc/mineru/MinerU_1.3.0/demo/preprocessed_data/det/det_input_20250421_034746_105.bin')
 
 # results = AisBenchInfer.infer_folder_det('/home/aicc/mineru/MinerU_1.3.0/demo/preprocessed_data/det')
 # results = AisBenchInfer.infer_folder_rec('/home/aicc/mineru/MinerU_1.3.0/demo/preprocessed_data/rec')

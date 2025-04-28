@@ -12,6 +12,7 @@ from .ais_bench_infer import AisBenchInfer
 
 class TextDetector(BaseOCRV20):
     def __init__(self, args, **kwargs):
+        # self.ais_bench_infer = AisBenchInfer(device_id=1)
         self.args = args
         self.det_algorithm = args.det_algorithm
         self.device = args.device
@@ -202,45 +203,16 @@ class TextDetector(BaseOCRV20):
         #     print(f"Failed to save preprocessed tensor: {e}")
         
         starttime = time.time()
-
-# todo2
-        # 新代码:
+        
+        # print("img.shape:", img.shape)
+        # print(img)
         # 执行华为昇腾推理
-        # ais_bench_infer = AisBenchInfer(device_id=0)
-        # outputs = ais_bench_infer.infer_det(img)  # outputs 类型为 List[numpy.ndarray]
+        # outputs = self.ais_bench_infer.muti_infer_det(img)  # outputs 类型为 List[numpy.ndarray]
         
-        # print("***********11111111111***************************")
-        # print(outputs)
-        # print("**********22222222222****************************")
-        # print(outputs[0])
-        # print(outputs[0].shape)
-
-        # 提取第一个输出数组（假设检测模型只有一个输出节点）
-
-        # 根据检测算法构建 preds 字典
+        # 构建 preds 字典，根据算法类型适配输出格式
         # preds = {}
-        # if self.det_algorithm == "EAST":
-        #     # 假设华为模型输出顺序为 [f_geo, f_score]
-        #     preds['f_geo'] = output_np[0]    # 根据实际输出索引调整
-        #     preds['f_score'] = output_np[1]   # 例如 output_np[0] 对应 f_geo
-        # elif self.det_algorithm == 'SAST':
-        #     # 假设输出顺序为 [f_border, f_score, f_tco, f_tvo]
-        #     preds['f_border'] = output_np[0]
-        #     preds['f_score'] = output_np[1]
-        #     preds['f_tco'] = output_np[2]
-        #     preds['f_tvo'] = output_np[3]
-        # elif self.det_algorithm in ['DB', 'PSE', 'DB++']:
-        #     # 假设输出直接对应 maps
-        #     preds['maps'] = output_np        # 例如 output_np.shape = (1, 3, H, W)
-        # elif self.det_algorithm == 'FCE':
-        #     # 假设多层级输出
-        #     for i in range(len(output_np)):
-        #         preds['level_{}'.format(i)] = output_np[i]
-        # else:
-        #     raise NotImplementedError
         
-        # print("**********33333333333****    " + self.det_algorithm)
-
+        # ===== 之前的推理方式（注释保留） =====
         with torch.no_grad():
             inp = torch.from_numpy(img)
             inp = inp.to(self.device)
@@ -263,6 +235,55 @@ class TextDetector(BaseOCRV20):
                 preds['level_{}'.format(i)] = output
         else:
             raise NotImplementedError
+        
+        # # ===== 现在的推理方式 =====
+        # # 由于outputs输出长度为1，直接获取第一个numpy数组作为检测结果
+        # if len(outputs) > 0:
+        #     # 对于DB, PSE, DB++算法，将输出直接作为maps
+        #     if self.det_algorithm in ['DB', 'PSE', 'DB++']:
+        #         preds['maps'] = outputs[0]  # 直接使用第一个输出作为maps
+        #     else:
+        #         # 其他算法可能需要回退到PyTorch模型，因为昇腾模型输出格式不匹配
+        #         print(f"华为昇腾推理返回的输出格式与 {self.det_algorithm} 算法不兼容，回退到PyTorch模型")
+        #         with torch.no_grad():
+        #             inp = torch.from_numpy(img)
+        #             inp = inp.to(self.device)
+        #             outputs_torch = self.net(inp)
+                    
+        #             if self.det_algorithm == "EAST":
+        #                 preds['f_geo'] = outputs_torch['f_geo'].cpu().numpy()
+        #                 preds['f_score'] = outputs_torch['f_score'].cpu().numpy()
+        #             elif self.det_algorithm == 'SAST':
+        #                 preds['f_border'] = outputs_torch['f_border'].cpu().numpy()
+        #                 preds['f_score'] = outputs_torch['f_score'].cpu().numpy()
+        #                 preds['f_tco'] = outputs_torch['f_tco'].cpu().numpy()
+        #                 preds['f_tvo'] = outputs_torch['f_tvo'].cpu().numpy()
+        #             elif self.det_algorithm == 'FCE':
+        #                 for i, (k, output) in enumerate(outputs_torch.items()):
+        #                     preds['level_{}'.format(i)] = output.cpu().numpy()
+        # else:
+        #     # 没有任何输出，回退到使用PyTorch模型
+        #     print("华为昇腾推理没有返回任何输出，回退到PyTorch模型")
+        #     with torch.no_grad():
+        #         inp = torch.from_numpy(img)
+        #         inp = inp.to(self.device)
+        #         outputs_torch = self.net(inp)
+                
+        #         if self.det_algorithm == "EAST":
+        #             preds['f_geo'] = outputs_torch['f_geo'].cpu().numpy()
+        #             preds['f_score'] = outputs_torch['f_score'].cpu().numpy()
+        #         elif self.det_algorithm == 'SAST':
+        #             preds['f_border'] = outputs_torch['f_border'].cpu().numpy()
+        #             preds['f_score'] = outputs_torch['f_score'].cpu().numpy()
+        #             preds['f_tco'] = outputs_torch['f_tco'].cpu().numpy()
+        #             preds['f_tvo'] = outputs_torch['f_tvo'].cpu().numpy()
+        #         elif self.det_algorithm in ['DB', 'PSE', 'DB++']:
+        #             preds['maps'] = outputs_torch['maps'].cpu().numpy()
+        #         elif self.det_algorithm == 'FCE':
+        #             for i, (k, output) in enumerate(outputs_torch.items()):
+        #                 preds['level_{}'.format(i)] = output.cpu().numpy()
+        #         else:
+        #             raise NotImplementedError
 
         post_result = self.postprocess_op(preds, shape_list)
         dt_boxes = post_result[0]['points']
